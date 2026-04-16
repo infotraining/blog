@@ -207,17 +207,50 @@ size_t calculate_hash(const T &obj, size_t seed = 0)
 }
 ```
 
-## Enabling Hashing for Custom Types
-
-Now it is almost complete. The final consideration is how to enable specialization of `std::hash` for a custom type. One approach is to optin to our hashing implementation by defining an alias, `enabled_for_hashing`, within a custom class. This alias activates the generation of a hash value using our implementation.
+The implementation above has one major flaw - it does not support private base classes (thanks to Barry Revzin for the comments). If we try to compile the line:
 
 ```cpp
-struct EnabledForHashing_t {};
+Utility::hash_combine(seed, static_cast<const Base &>(obj));
+```
+
+The compiler will reject this code because private base class is inaccessible. The solution for this flow is to splice base-class object.
+
+### Splicing Sub-Objects (Updated)
+
+C++26 addresses the issue by enabling the splicing of a base class sub-object. You can access a base class sub-object using the syntax `obj.[:r_base:]`, where `r_base` si reflection of a base class of the type of `obj`.  
+  
+This method enables consistent access to both base class sub-objects and non-static data members. The streamlined iteration is as follows:
+
+```cpp
+template <typename T>
+    requires std::is_class_v<T>
+size_t calculate_hash(const T& obj, size_t seed = 0)
+{
+    constexpr auto ctx = std::meta::access_context::unchecked();
+
+    static constexpr auto r_subobjects = std::define_static_array(std::meta::subobjects_of(^^T, ctx));
+
+    template for (constexpr auto r_sub : r_subobjects)
+    {
+        using Subobject_t = typename[:std::meta::type_of(r_sub):];
+        static_assert(Hashable<Subobject_t>, "Subobject must be hashable");
+        Utility::hash_combine(seed, obj.[:r_sub:]);
+    }
+
+    return seed;
+}
+```
+
+## Enabling Hashing for Custom Types
+
+Now it's nearly complete. The final step is to enable specialization of `std::hash` for a custom type. We can define a constexpr template variable, `enabled_for_hashing<T>`, which defaults to `false`, and create a concept, `EnabledForHashing`, as an alias for this boolean expression. To opt-in a custom type, we provide a specialized template definition set to `true`.
+
+```cpp
+template <typename T>
+inline constexpr bool EnabledForHashing_v = false;
 
 template <typename T>
-concept EnabledForHashing = requires {
-   typename T::enabled_for_hashing;
-};
+concept EnabledForHashing = EnabledForHashing_v<T>;
 
 // specialization for types opted-in for hashing
 template <EnabledForHashing T>
@@ -229,12 +262,13 @@ struct std::hash<T>
     }
 };
 
-class Person
-{
-    using enabled_for_hashing = EnabledForHashing_t;
-
-    //...
+class Person : Id
+{   
+    std::string name;
 };
+
+template <>
+inline constexpr bool EnabledForHashing_v<Person> = true;
 ```
 
 ## **Conclusion**
@@ -247,4 +281,4 @@ Going forward, use reflection-based hashing to reduce maintenance burden, but: t
 
 As a next step, we can extend our implementation with features like attributes that will allow us to discard some values for calculating the hash, but I think it is a nice subject for a next post.
 
-The example of code can be found at: https://godbolt.org/z/1covqd36r
+The example of code can be found at: [https://godbolt.org/z/1covqd36r](https://godbolt.org/z/aTaqzKbsj)

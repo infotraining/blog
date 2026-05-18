@@ -68,7 +68,7 @@ consteval std::meta::info member_number(int n) {
 int main() {
   Person p{42, "John Doe"};
 
-  p.[: member_number(0) :] = 665;  // Same as: p.id = 42;
+  p.[: member_number(0) :] = 665;  // Same as: p.id = 665;
   p.[: member_number(1) :] = "John Smith"; // Same as: p.name = "John Smith";
   p.[: member_number(5) :] = "John Doe";   // Error: member_number(5) is not a constant
 }
@@ -217,8 +217,8 @@ The compiler will reject this code because private base class is inaccessible. T
 
 ### Splicing Sub-Objects (Updated)
 
-C++26 addresses the issue by enabling the splicing of a base class sub-object. You can access a base class sub-object using the syntax `obj.[:r_base:]`, where `r_base` si reflection of a base class of the type of `obj`.  
-  
+C++26 addresses the issue by enabling the splicing of a base class sub-object. You can access a base class sub-object using the syntax `obj.[:r_base:]`, where `r_base` si reflection of a base class of the type of `obj`.
+
 This method enables consistent access to both base class sub-objects and non-static data members. The streamlined iteration is as follows:
 
 ```cpp
